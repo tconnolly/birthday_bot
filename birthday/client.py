@@ -11,14 +11,19 @@ class BirthdayClient(commands.Bot):
         super().__init__(command_prefix='!')
         self.add_command(self.add)
         self.add_command(self.list)
+        self.announcement_channels = {}
         self.birthdays = {}
 
-    def add_birthday(self, date, channel_id, user_id):
+    def add_announcement_channel(self, guild_id, channel_id):
+        if guild_id not in self.announcement_channels:
+            self.announcement_channels[guild_id] = channel_id
+
+    def add_birthday(self, date, guild_id, user_id):
         # Create list of birthdays for the date if one doesn't already exist
         if date not in self.birthdays:
             self.birthdays[date] = []
 
-        self.birthdays[date].append((channel_id, user_id))
+        self.birthdays[date].append((guild_id, user_id))
 
     @commands.command()
     async def add(self, ctx, user_id, iso_date):
@@ -31,15 +36,23 @@ class BirthdayClient(commands.Bot):
             await ctx.send('Invalid date format. Must be YYYY-MM-DD.')
             return
 
-        self.add_birthday(date, ctx.channel.id, user_id)
+        self.add_announcement_channel(ctx.guild.id, ctx.channel.id)
+        self.add_birthday(date, ctx.guild.id, user_id)
 
-        ctx.send(f'Added {user_id}\'s birthday!')
+        await ctx.send(f'Added {user_id}\'s birthday!')
+
+    @commands.command()
+    async def channel(self, ctx, channel_id):
+        self.add_announcement_channel(ctx.guild.id, channel_id)
+
+        await ctx.send(f'Set announcement channel to: {channel_id}')
 
     @commands.command()
     async def list(self, ctx):
         for birthday in self.birthdays:
-            channels = self.birthdays[birthday]
+            birthdays = self.birthdays[birthday]
 
-            for (channel_id, user_id) in channels:
+            for (guild_id, user_id) in birthdays:
+                channel_id = self.announcement_channels[guild_id]
                 channel = self.get_channel(channel_id)
                 await channel.send(f'Happy birthday {user_id}!')
