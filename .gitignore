@@ -1,0 +1,10 @@
+# Build
+build/
+dist/
+*.egg-info
+
+# Environments
+env/
+
+# VS Code
+.vscode/
