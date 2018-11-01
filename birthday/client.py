@@ -1,6 +1,7 @@
 import discord
 import logging
-from .db import Session, GuildChannel, Birthday, GuildChannelRepository, BirthdayRepository
+from .db import Session, GuildChannel, Birthday
+from .repository import GuildChannelRepository, BirthdayRepository
 from datetime import datetime
 from discord.ext import commands
 
