@@ -1,26 +1,12 @@
 import discord
 import logging
-from .db import Session, GuildChannel, Birthday
-from .repository import GuildChannelRepository, BirthdayRepository
 from datetime import datetime
 from discord.ext import commands
+from .db import Session, GuildChannel, Birthday
+from .repository import GuildChannelRepository, BirthdayRepository
+from .util import strip_id_wrapper, wrap_channel_id, wrap_user_id
 
 log = logging.getLogger(__name__)
-
-
-def strip_id_wrapper(id):
-    """Trim the Discord channel ID formatting <#123456789>/<@123456789>."""
-    return id[2:-1]
-
-
-def wrap_user_id(user_id):
-    """Wrap user ID for mention in Discord message."""
-    return f'<@{user_id}>'
-
-
-def wrap_channel_id(channel_id):
-    """Wrap channel ID for mention in Discord message."""
-    return f'<#{channel_id}>'
 
 
 class Client(commands.Bot):
