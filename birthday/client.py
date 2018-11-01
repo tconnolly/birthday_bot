@@ -1,5 +1,6 @@
 import discord
 import logging
+from birthday.db import Session, AnnouncementChannel, Birthday
 from datetime import datetime
 from discord.ext import commands
 
@@ -10,20 +11,19 @@ class BirthdayClient(commands.Bot):
     def __init__(self):
         super().__init__(command_prefix='!')
         self.add_command(self.add)
+        self.add_command(self.channel)
         self.add_command(self.list)
-        self.announcement_channels = {}
-        self.birthdays = {}
+        self.session = Session()
 
     def add_announcement_channel(self, guild_id, channel_id):
-        if guild_id not in self.announcement_channels:
-            self.announcement_channels[guild_id] = channel_id
+        """Adds an announcement channel if one does not already exist for the guild_id."""
+        if self.session.query(AnnouncementChannel).filter_by(guild_id=guild_id).first() == None:
+            self.session.add(AnnouncementChannel(guild_id, channel_id))
 
     def add_birthday(self, date, guild_id, user_id):
-        # Create list of birthdays for the date if one doesn't already exist
-        if date not in self.birthdays:
-            self.birthdays[date] = []
-
-        self.birthdays[date].append((guild_id, user_id))
+        """Adds a birthday if one does not alreay exist for the guild_id and user_id combination."""
+        if self.session.query(Birthday).filter_by(guild_id=guild_id, user_id=user_id).first() == None:
+            self.session.add(Birthday(date, guild_id, user_id))
 
     @commands.command()
     async def add(self, ctx, user_id, iso_date):
@@ -43,16 +43,16 @@ class BirthdayClient(commands.Bot):
 
     @commands.command()
     async def channel(self, ctx, channel_id):
+        # TODO update if already exists
         self.add_announcement_channel(ctx.guild.id, channel_id)
 
         await ctx.send(f'Set announcement channel to: {channel_id}')
 
     @commands.command()
     async def list(self, ctx):
-        for birthday in self.birthdays:
-            birthdays = self.birthdays[birthday]
+        for user_id, channel_id in self.session.query(Birthday.user_id, AnnouncementChannel.channel_id).\
+                filter(Birthday.guild_id == ctx.guild.id).\
+                filter(AnnouncementChannel.guild_id == ctx.guild.id):
 
-            for (guild_id, user_id) in birthdays:
-                channel_id = self.announcement_channels[guild_id]
-                channel = self.get_channel(channel_id)
-                await channel.send(f'Happy birthday {user_id}!')
+            channel = self.get_channel(channel_id)
+            await channel.send(f'Happy birthday{user_id}')
