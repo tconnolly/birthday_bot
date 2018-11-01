@@ -33,7 +33,7 @@ class Birthday(Base):
 
 # Create an engine that stores data in the local directory's
 # birthday_bot.db file.
-engine = create_engine('sqlite:///birthday_bot.db')
+engine = create_engine('sqlite:///data/birthday_bot.db')
 
 # Create all tables in the engine. This is equivalent to "Create Table"
 # statements in raw SQL.
