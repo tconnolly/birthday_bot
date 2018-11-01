@@ -1,37 +1,54 @@
 import discord
 import logging
-from birthday.db import Session, AnnouncementChannel, Birthday
+from .db import Session, GuildChannel, Birthday, GuildChannelRepository, BirthdayRepository
 from datetime import datetime
 from discord.ext import commands
 
 log = logging.getLogger(__name__)
 
 
-class BirthdayClient(commands.Bot):
+def strip_id_wrapper(id):
+    """Trim the Discord channel ID formatting <#123456789>/<@123456789>."""
+    return id[2:-1]
+
+
+def wrap_user_id(user_id):
+    """Wrap user ID for mention in Discord message."""
+    return f'<@{user_id}>'
+
+
+def wrap_channel_id(channel_id):
+    """Wrap channel ID for mention in Discord message."""
+    return f'<#{channel_id}>'
+
+
+class Client(commands.Bot):
     def __init__(self):
         super().__init__(command_prefix='!')
         self.add_command(self.add)
         self.add_command(self.channel)
         self.add_command(self.list)
+
         self.session = Session()
+        self.guild_channel_repository = GuildChannelRepository(self.session)
+        self.birthday_repository = BirthdayRepository(self.session)
 
-    def add_announcement_channel(self, guild_id, channel_id):
+    def add_guild_channel(self, guild_id, channel_id):
         """Adds an announcement channel if one does not already exist for the guild_id."""
-        if self.session.query(AnnouncementChannel).filter_by(guild_id=guild_id).first() == None:
-            self.session.add(AnnouncementChannel(guild_id, channel_id))
-            self.session.commit()
+        if not self.guild_channel_repository.exists(guild_id):
+            guild_channel = GuildChannel(guild_id, channel_id)
+            self.guild_channel_repository.save(guild_channel)
 
-    def update_announcement_channel(self, guild_id, channel_id):
-        for announcement_channel in self.session.query(AnnouncementChannel).filter_by(guild_id=guild_id):
-            announcement_channel.channel_id = channel_id
-            self.session.add(announcement_channel)
-            self.session.commit()
+    def update_guild_channel(self, guild_id, channel_id):
+        for guild_channel in self.guild_channel_repository.find_by(guild_id=guild_id):
+            guild_channel.channel_id = channel_id
+            self.guild_channel_repository.save(guild_channel)
 
     def add_birthday(self, date, guild_id, user_id):
         """Adds a birthday if one does not alreay exist for the guild_id and user_id combination."""
-        if self.session.query(Birthday).filter_by(guild_id=guild_id, user_id=user_id).first() == None:
-            self.session.add(Birthday(date, guild_id, user_id))
-            self.session.commit()
+        if not self.birthday_repository.exists(guild_id, user_id):
+            birthday = Birthday(date, guild_id, user_id)
+            self.birthday_repository.save(birthday)
 
     @commands.command()
     async def add(self, ctx, user_id, iso_date):
@@ -44,26 +61,25 @@ class BirthdayClient(commands.Bot):
             await ctx.send('Invalid date format. Must be YYYY-MM-DD.')
             return
 
-        self.add_announcement_channel(ctx.guild.id, ctx.channel.id)
-        # Trim the Discord user ID formatting <@123456789>
-        self.add_birthday(date, ctx.guild.id, user_id[2:-1])
+        self.add_guild_channel(ctx.guild.id, ctx.channel.id)
+        self.add_birthday(date, ctx.guild.id, strip_id_wrapper(user_id))
 
-        await ctx.send(f'Added {user_id}\'s birthday!')
+        await ctx.send(f"Added {user_id}'s birthday!")
 
     @commands.command()
     async def channel(self, ctx, channel_id):
-        # Trim the Discord channel ID formatting <#123456789>
-        channel_id = channel_id[2:-1]
-        self.add_announcement_channel(ctx.guild.id, channel_id)
-        self.update_announcement_channel(ctx.guild.id, channel_id)
+        channel_id = strip_id_wrapper(channel_id)
+        self.add_guild_channel(ctx.guild.id, channel_id)
+        self.update_guild_channel(ctx.guild.id, channel_id)
 
-        await ctx.send(f'Set announcement channel to: <#{channel_id}>')
+        await ctx.send(f'Set announcement channel to: {wrap_channel_id(channel_id)}')
 
     @commands.command()
     async def list(self, ctx):
-        for user_id, channel_id in self.session.query(Birthday.user_id, AnnouncementChannel.channel_id).\
-                filter(Birthday.guild_id == ctx.guild.id).\
-                filter(AnnouncementChannel.guild_id == ctx.guild.id):
-
+        guild_id = ctx.guild.id
+        # TODO Extract session query
+        for user_id, channel_id in self.session.query(Birthday.user_id, GuildChannel.channel_id).\
+                filter(Birthday.guild_id == guild_id).\
+                filter(GuildChannel.guild_id == guild_id):
             channel = self.get_channel(channel_id)
-            await channel.send(f'Happy birthday <@{user_id}>!')
+            await channel.send(f'Happy birthday {wrap_user_id(user_id)}!')
