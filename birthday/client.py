@@ -19,11 +19,19 @@ class BirthdayClient(commands.Bot):
         """Adds an announcement channel if one does not already exist for the guild_id."""
         if self.session.query(AnnouncementChannel).filter_by(guild_id=guild_id).first() == None:
             self.session.add(AnnouncementChannel(guild_id, channel_id))
+            self.session.commit()
+
+    def update_announcement_channel(self, guild_id, channel_id):
+        for announcement_channel in self.session.query(AnnouncementChannel).filter_by(guild_id=guild_id):
+            announcement_channel.channel_id = channel_id
+            self.session.add(announcement_channel)
+            self.session.commit()
 
     def add_birthday(self, date, guild_id, user_id):
         """Adds a birthday if one does not alreay exist for the guild_id and user_id combination."""
         if self.session.query(Birthday).filter_by(guild_id=guild_id, user_id=user_id).first() == None:
             self.session.add(Birthday(date, guild_id, user_id))
+            self.session.commit()
 
     @commands.command()
     async def add(self, ctx, user_id, iso_date):
@@ -37,16 +45,19 @@ class BirthdayClient(commands.Bot):
             return
 
         self.add_announcement_channel(ctx.guild.id, ctx.channel.id)
-        self.add_birthday(date, ctx.guild.id, user_id)
+        # Trim the Discord user ID formatting <@123456789>
+        self.add_birthday(date, ctx.guild.id, user_id[2:-1])
 
         await ctx.send(f'Added {user_id}\'s birthday!')
 
     @commands.command()
     async def channel(self, ctx, channel_id):
-        # TODO update if already exists
+        # Trim the Discord channel ID formatting <#123456789>
+        channel_id = channel_id[2:-1]
         self.add_announcement_channel(ctx.guild.id, channel_id)
+        self.update_announcement_channel(ctx.guild.id, channel_id)
 
-        await ctx.send(f'Set announcement channel to: {channel_id}')
+        await ctx.send(f'Set announcement channel to: <#{channel_id}>')
 
     @commands.command()
     async def list(self, ctx):
@@ -55,4 +66,4 @@ class BirthdayClient(commands.Bot):
                 filter(AnnouncementChannel.guild_id == ctx.guild.id):
 
             channel = self.get_channel(channel_id)
-            await channel.send(f'Happy birthday{user_id}')
+            await channel.send(f'Happy birthday <@{user_id}>!')
